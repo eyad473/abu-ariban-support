@@ -1,0 +1,17 @@
+name = "abu-ariban-support"
+main = "worker/src/index.js"
+compatibility_date = "2024-11-01"
+
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+# نفس قاعدة البيانات تبعت التطبيق الموحد بالضبط
+[[d1_databases]]
+binding = "DB"
+database_name = "abu-ariban-db"
+database_id = "b88e6b3c-719d-44aa-9b54-5cafa091fe62"
+
+# لازم تضبطهم بعد النشر عبر:
+# wrangler secret put TELEGRAM_TOKEN
+# wrangler secret put TELEGRAM_OWNER_CHAT_ID
