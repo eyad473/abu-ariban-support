@@ -80,27 +80,33 @@ async function clearFailedAttempts(env, ip) {
   await env.DB.prepare(`DELETE FROM support_failed_attempts WHERE ip=?`).bind(ip).run();
 }
 
-// ---------- أسئلة التحقق: من بيانات العائلة الموجودة أصلًا بقاعدة التطبيق الموحد ----------
+// ---------- أسئلة التحقق: من بيانات العائلة الموجودة أصلًا بقاعدة التطبيق الموحد (حتى 3 أسئلة) ----------
 async function pickVerificationQuestions(env, family) {
   const members = (
-    await env.DB.prepare(`SELECT full_name, birth_year FROM family_members WHERE family_id=? AND birth_year IS NOT NULL`)
+    await env.DB.prepare(`SELECT full_name, birth_year, relation FROM family_members WHERE family_id=? AND birth_year IS NOT NULL`)
       .bind(family.id)
       .all()
   ).results;
 
   const questions = [];
-  const shuffled = [...members].sort(() => Math.random() - 0.5);
-  if (shuffled[0]) {
-    questions.push({ type: "birthyear", prompt: `ما هي سنة ميلاد ${shuffled[0].full_name}؟`, answer: String(shuffled[0].birth_year) });
+  const shuffledMembers = [...members].sort(() => Math.random() - 0.5);
+  for (const m of shuffledMembers) {
+    if (questions.length >= 2) break; // نسيب مكان لسؤال ثالث متنوع (رقم الهاتف أو عدد الأفراد)
+    const label = m.relation === "زوجة" ? "زوجة رب الأسرة" : m.full_name;
+    questions.push({ type: "birthyear", prompt: `ما هي سنة ميلاد ${label}؟`, answer: String(m.birth_year) });
   }
-  if (family.phone_last4) {
+  if (family.member_count && questions.length < 3) {
+    questions.push({ type: "member_count", prompt: "كم عدد أفراد أسرتك بالضبط (حسب سجل النزوح)؟", answer: String(family.member_count) });
+  }
+  if (family.phone_last4 && questions.length < 3) {
     questions.push({ type: "phone", prompt: "ما هي آخر 4 أرقام من رقم الجوال المسجل لدى العائلة؟", answer: family.phone_last4 });
   }
-  return questions.slice(0, 2);
+  return questions.sort(() => Math.random() - 0.5).slice(0, 3);
 }
 function checkAnswer(question, userText) {
   const digits = (String(userText).match(/\d+/g) || []).join("");
   if (question.type === "birthyear") return extractYear(userText) === question.answer;
+  if (question.type === "member_count") return digits === question.answer;
   if (question.type === "phone") return digits.endsWith(question.answer);
   return false;
 }
@@ -195,18 +201,23 @@ export default {
       // ---------------- بيانات العائلة المسجلة ----------------
       if (path === "/api/my-data" && method === "GET") {
         const session = await activeSession(env, url.searchParams.get("token"));
-        if (!session) return json({ ok: false }, 401);
+        if (!session) return json({ ok: false, message: "انتهت صلاحية الجلسة، رجاءً سجّل من جديد برقم هويتك" }, 401);
         const family = await env.DB.prepare(`SELECT * FROM families WHERE id=?`).bind(session.family_id).first();
         const members = await env.DB.prepare(`SELECT full_name, relation FROM family_members WHERE family_id=?`).bind(session.family_id).all();
+        const distributions = await env.DB.prepare(
+          `SELECT item_name, quantity, source_org, distribution_date FROM distributions WHERE family_id=? ORDER BY distribution_date DESC LIMIT 50`
+        ).bind(session.family_id).all();
         return json({
           ok: true,
           fields: [
             { label: "رب الأسرة", value: family.head_name },
             { label: "عدد الأفراد", value: String(family.member_count) },
             { label: "الموقع الحالي", value: family.current_location || "—" },
+            { label: "منطقة الأصل", value: family.origin_area || "—" },
             { label: "الحالة", value: family.status },
             ...members.results.map((m) => ({ label: m.relation || "فرد", value: m.full_name })),
           ],
+          distributions: distributions.results,
         });
       }
 
@@ -214,7 +225,7 @@ export default {
       if (path === "/api/submit-request" && method === "POST") {
         const body = await request.json();
         const session = await activeSession(env, body.token);
-        if (!session) return json({ ok: false }, 401);
+        if (!session) return json({ ok: false, message: "انتهت صلاحية الجلسة، رجاءً سجّل من جديد برقم هويتك" }, 401);
 
         const category = String(body.category || "").trim();
         const detailsText = String(body.details || "").trim();
@@ -242,7 +253,7 @@ export default {
       // ---------------- طلبات العائلة كلها ----------------
       if (path === "/api/my-requests" && method === "GET") {
         const session = await activeSession(env, url.searchParams.get("token"));
-        if (!session) return json({ ok: false }, 401);
+        if (!session) return json({ ok: false, message: "انتهت صلاحية الجلسة، رجاءً سجّل من جديد برقم هويتك" }, 401);
         const rows = await env.DB.prepare(
           `SELECT request_code, category, details_text, reply, seen, created_at FROM support_requests WHERE family_id=? ORDER BY created_at DESC`
         )
@@ -265,7 +276,7 @@ export default {
       if (path === "/api/mark-seen" && method === "POST") {
         const body = await request.json();
         const session = await activeSession(env, body.token);
-        if (!session) return json({ ok: false }, 401);
+        if (!session) return json({ ok: false, message: "انتهت صلاحية الجلسة، رجاءً سجّل من جديد برقم هويتك" }, 401);
         await env.DB.prepare(`UPDATE support_requests SET seen=1 WHERE request_code=? AND family_id=?`)
           .bind(body.requestCode, session.family_id)
           .run();
