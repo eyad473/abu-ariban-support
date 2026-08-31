@@ -36,14 +36,19 @@ async function setSetting(env, key, value) {
     .run();
 }
 
-// ---------- تلغرام (استدعاء API مباشر، بدون مكتبة polling) ----------
+// ---------- تلغرام (اختياري تمامًا — لو ما في توكن مضبوط، نتجاهله بهدوء بدون ما نكسر الطلب) ----------
 async function tgCall(env, method, payload) {
-  const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_TOKEN}/${method}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return res.json();
+  if (!env.TELEGRAM_TOKEN) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_TOKEN}/${method}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return res.json();
+  } catch (e) {
+    return null;
+  }
 }
 async function notifyOwner(env, text) {
   try {
