@@ -66,8 +66,14 @@ let token = sessionStorage.getItem('support_token') || '';
 let familyName = sessionStorage.getItem('support_name') || '';
 
 async function api(path, opts={}){
-  const res = await fetch(API+path, { ...opts, headers:{'Content-Type':'application/json', ...(opts.headers||{})} });
-  return res.json();
+  try{
+    const res = await fetch(API+path, { ...opts, headers:{'Content-Type':'application/json', ...(opts.headers||{})} });
+    const data = await res.json();
+    if(!data.message && !data.ok) data.message = 'حدث خطأ غير متوقع، حاول مجددًا';
+    return data;
+  }catch(e){
+    return { ok:false, message: 'تعذر الاتصال بالخادم — تأكد من الإنترنت وحاول مجددًا' };
+  }
 }
 function esc(s){ return (s??'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -125,9 +131,28 @@ function screenMenu(){
       <div class="menu-grid">
         <button onclick="screenNewRequest()">✏️ طلب جديد</button>
         <button class="secondary" onclick="screenMyRequests()">📋 طلباتي</button>
+        <button class="secondary" onclick="screenMyData()" style="grid-column:1 / -1">🗂️ بياناتي وسجل التوزيعات</button>
       </div>
     </div>
     <button class="link-btn" onclick="logout()">تسجيل خروج</button>`;
+}
+
+async function screenMyData(){
+  document.getElementById('main').innerHTML = `<div class="card"><p>جارِ التحميل...</p></div>`;
+  const data = await api('/my-data?token='+encodeURIComponent(token));
+  if(!data.ok){ document.getElementById('main').innerHTML = `<div class="card"><p class="msg error" style="display:block">${esc(data.message)}</p><button class="secondary" onclick="screenMenu()">رجوع</button></div>`; return; }
+  document.getElementById('main').innerHTML = `
+    <button class="secondary" onclick="screenMenu()" style="margin-bottom:10px">رجوع</button>
+    <div class="card">
+      <p style="font-weight:800;color:#0E6B64;margin-bottom:8px">بيانات العائلة</p>
+      ${data.fields.map(f=>`<div class="field"><span class="label">${esc(f.label)}</span><span class="value">${esc(f.value)}</span></div>`).join('')}
+    </div>
+    <div class="card">
+      <p style="font-weight:800;color:#0E6B64;margin-bottom:8px">سجل التوزيعات</p>
+      ${data.distributions.length ? data.distributions.map(d=>`
+        <div class="field"><span class="label">${esc(d.item_name)}${d.quantity?' — '+esc(d.quantity):''}</span><span class="value" style="font-weight:400;font-size:12px">${esc(d.distribution_date)}</span></div>
+      `).join('') : '<p style="font-size:13px;color:#8A7F6E">لا يوجد توزيعات مسجلة بعد</p>'}
+    </div>`;
 }
 
 function screenNewRequest(){
