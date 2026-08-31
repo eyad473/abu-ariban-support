@@ -1,1 +1,196 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الدعم الفني - مخيم أبو عريبان</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; }
+body { font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif; background: #E8E1D3; color: #2B2622; margin: 0; min-height: 100vh; }
+#app { max-width: 480px; margin: 0 auto; padding: 16px; min-height: 100vh; display: flex; flex-direction: column; }
+header { text-align: center; padding: 20px 0; }
+header h1 { margin: 0; font-size: 22px; font-weight: 800; color: #2B2622; }
+.subtitle { color: #8A7F6E; margin: 4px 0 0; font-size: 13px; }
+main { flex: 1; }
+.card { background: #FFFFFF; border-radius: 18px; padding: 20px; margin-bottom: 14px; box-shadow: 0 2px 10px rgba(60, 50, 30, 0.06); animation: fadeIn .18s ease; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+.card p { color: #4A4238; font-size: 14.5px; line-height: 1.7; margin: 0 0 12px; }
+.card p:last-child { margin-bottom: 0; }
+input[type="text"], textarea, select { width: 100%; padding: 13px 14px; border-radius: 12px; border: 1.5px solid #E5DFD1; background: #FBF9F3; color: #2B2622; font-size: 15px; margin-bottom: 4px; font-family: inherit; }
+input:focus, textarea:focus, select:focus { outline: none; border-color: #0E6B64; background: #fff; box-shadow: 0 0 0 3px rgba(14,107,100,.12); }
+textarea { min-height: 100px; resize: vertical; }
+label { display:block; font-size: 13px; color:#8A7F6E; margin: 10px 0 5px; }
+button { width: 100%; padding: 13px; border-radius: 12px; border: none; background: #0E6B64; color: #fff; font-size: 16px; font-weight: 700; font-family: inherit; cursor: pointer; margin-bottom: 10px; }
+button:active { transform: scale(.97); }
+button.secondary { background: #F1ECE0; color: #4A4238; }
+.menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.menu-grid button { margin-bottom: 0; padding: 20px 10px; }
+.name-highlight { color: #0E6B64; font-weight: 800; }
+.msg { padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; font-size: 14px; display:none; }
+.msg.error { background: #F8E4E0; color: #A5402F; display:block; }
+.msg.success { background: #E3F3F1; color: #0E6B64; display:block; }
+.field { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #EFE9DB; font-size: 14px; }
+.field:last-child { border-bottom: none; }
+.field .label { color: #8A7F6E; flex-shrink: 0; }
+.field .value { text-align: left; font-weight: 700; color: #2B2622; }
+.category-chip { display: inline-block; background: #E3F3F1; color: #0E6B64; padding: 4px 12px; border-radius: 20px; font-size: 12.5px; font-weight: 700; margin-bottom: 10px; }
+.request-code { font-size: 30px; text-align: center; font-weight: 800; color: #0E6B64; letter-spacing: 3px; margin: 6px 0 14px; }
+.link-btn { background: none; color: #0E6B64; text-decoration: underline; padding: 6px; }
+.site-footer { text-align: center; font-size: 11px; color: #A79C88; padding: 16px 8px 8px; }
+.badge-dot { display: inline-block; background: #D64545; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 12px; margin-right: 6px; }
+.status-replied { color: #0E6B64; font-size: 11.5px; font-weight: 700; }
+.status-pending { color: #A79C88; font-size: 11.5px; }
+.request-item { background: #FFFFFF; border-radius: 14px; padding: 14px 16px; margin-bottom: 8px; border: 1.5px solid transparent; }
+.request-item.unseen { border-color: #D64545; }
+.request-item-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.request-item-details { font-size: 13px; color: #8A7F6E; margin: 0; }
+.request-item-reply { background:#FBF9F3; border-radius:10px; padding:10px; font-size:13.5px; margin-top:8px; }
+</style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>الدعم الفني</h1>
+      <p class="subtitle">مخيم أبو عريبان</p>
+    </header>
+    <main id="main"></main>
+    <footer class="site-footer">© 2026 جميع الحقوق محفوظة لـ أبو عمر البيك</footer>
+  </div>
 
+<script>
+const API = '/api';
+let token = sessionStorage.getItem('support_token') || '';
+let familyName = sessionStorage.getItem('support_name') || '';
+
+async function api(path, opts={}){
+  const res = await fetch(API+path, { ...opts, headers:{'Content-Type':'application/json', ...(opts.headers||{})} });
+  return res.json();
+}
+function esc(s){ return (s??'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ---------- شاشة إدخال رقم الهوية ----------
+function screenId(){
+  document.getElementById('main').innerHTML = `
+    <div class="card">
+      <p>أدخل رقم هويتك للمتابعة</p>
+      <input type="text" id="idInput" inputmode="numeric" placeholder="رقم الهوية">
+      <div class="msg" id="idMsg"></div>
+      <button onclick="verifyId()">متابعة</button>
+    </div>
+    <div class="card">
+      <p>🔍 تفقد حالة طلب سابق</p>
+      <input type="text" id="csId" inputmode="numeric" placeholder="رقم الهوية">
+      <input type="text" id="csCode" inputmode="numeric" placeholder="رقم الطلب" maxlength="4">
+      <div class="msg" id="csMsg"></div>
+      <button class="secondary" onclick="checkStatus()">تفقد</button>
+    </div>`;
+}
+async function verifyId(){
+  const id = document.getElementById('idInput').value.trim();
+  const msg = document.getElementById('idMsg'); msg.className='msg';
+  const data = await api('/verify-id', {method:'POST', body:JSON.stringify({id})});
+  if(!data.ok){ msg.className='msg error'; msg.textContent=data.message; return; }
+  token = data.token;
+  if(data.verified){ familyName = data.familyName; saveSession(); screenMenu(); return; }
+  screenQuestion(data.question, data.qIndex, data.total);
+}
+function screenQuestion(question, qIndex, total){
+  document.getElementById('main').innerHTML = `
+    <div class="card">
+      <span class="category-chip">سؤال تحقق ${qIndex+1}/${total}</span>
+      <p>${esc(question)}</p>
+      <input type="text" id="ansInput" placeholder="إجابتك">
+      <div class="msg" id="ansMsg"></div>
+      <button onclick="verifyAnswer()">تأكيد</button>
+    </div>`;
+}
+async function verifyAnswer(){
+  const answer = document.getElementById('ansInput').value.trim();
+  const msg = document.getElementById('ansMsg'); msg.className='msg';
+  const data = await api('/verify-answer', {method:'POST', body:JSON.stringify({token, answer})});
+  if(!data.ok){ msg.className='msg error'; msg.textContent=data.message; return; }
+  if(data.verified){ familyName = data.familyName; saveSession(); screenMenu(); return; }
+  screenQuestion(data.question, data.qIndex, data.total);
+}
+function saveSession(){ sessionStorage.setItem('support_token', token); sessionStorage.setItem('support_name', familyName); }
+
+// ---------- القائمة الرئيسية ----------
+function screenMenu(){
+  document.getElementById('main').innerHTML = `
+    <div class="card">
+      <p>أهلاً <span class="name-highlight">${esc(familyName)}</span> 👋</p>
+      <div class="menu-grid">
+        <button onclick="screenNewRequest()">✏️ طلب جديد</button>
+        <button class="secondary" onclick="screenMyRequests()">📋 طلباتي</button>
+      </div>
+    </div>
+    <button class="link-btn" onclick="logout()">تسجيل خروج</button>`;
+}
+
+function screenNewRequest(){
+  document.getElementById('main').innerHTML = `
+    <div class="card">
+      <label>نوع الطلب</label>
+      <select id="reqCat">
+        <option>شكوى</option><option>ملاحظة</option><option>استفسار</option><option>مشكلة</option>
+      </select>
+      <label>التفاصيل</label>
+      <textarea id="reqDetails" placeholder="اكتب التفاصيل هنا..."></textarea>
+      <div class="msg" id="reqMsg"></div>
+      <button onclick="submitRequest()">إرسال</button>
+      <button class="secondary" onclick="screenMenu()">رجوع</button>
+    </div>`;
+}
+async function submitRequest(){
+  const category = document.getElementById('reqCat').value;
+  const details = document.getElementById('reqDetails').value.trim();
+  const msg = document.getElementById('reqMsg'); msg.className='msg';
+  if(!details){ msg.className='msg error'; msg.textContent='اكتب تفاصيل الطلب'; return; }
+  const data = await api('/submit-request', {method:'POST', body:JSON.stringify({token, category, details})});
+  if(!data.ok){ msg.className='msg error'; msg.textContent=data.message; return; }
+  document.getElementById('main').innerHTML = `
+    <div class="card" style="text-align:center">
+      <p>✅ تم إرسال طلبك بنجاح</p>
+      <div class="request-code">${esc(data.requestCode)}</div>
+      <p style="font-size:13px">احتفظ برقم الطلب هذا لتتبع حالته</p>
+      <button onclick="screenMenu()">رجوع للقائمة</button>
+    </div>`;
+}
+
+async function screenMyRequests(){
+  document.getElementById('main').innerHTML = `<div class="card"><p>جارِ التحميل...</p></div>`;
+  const data = await api('/my-requests?token='+encodeURIComponent(token));
+  if(!data.ok){ document.getElementById('main').innerHTML = `<div class="card"><p>تعذر التحميل</p></div>`; return; }
+  document.getElementById('main').innerHTML = `
+    <button class="secondary" onclick="screenMenu()" style="margin-bottom:10px">رجوع</button>
+    ${data.requests.length ? data.requests.map(r=>`
+      <div class="request-item ${r.unseen?'unseen':''}">
+        <div class="request-item-top">
+          <span>${r.unseen?'<span class="badge-dot">جديد</span>':''}${esc(r.category)} #${esc(r.requestCode)}</span>
+          <span class="${r.reply?'status-replied':'status-pending'}">${r.reply?'تم الرد':'قيد المراجعة'}</span>
+        </div>
+        <p class="request-item-details">${esc(r.detailsText)}</p>
+        ${r.reply ? `<div class="request-item-reply">💬 ${esc(r.reply)}</div>` : ''}
+      </div>`).join('') : '<div class="card"><p>لا يوجد طلبات بعد</p></div>'}`;
+}
+function logout(){ sessionStorage.clear(); token=''; familyName=''; screenId(); }
+
+// ---------- تفقد حالة طلب بدون تسجيل دخول ----------
+async function checkStatus(){
+  const id = document.getElementById('csId').value.trim();
+  const code = document.getElementById('csCode').value.trim();
+  const msg = document.getElementById('csMsg'); msg.className='msg';
+  const data = await api(`/check-status?id=${encodeURIComponent(id)}&code=${encodeURIComponent(code)}`);
+  if(!data.ok){ msg.className='msg error'; msg.textContent=data.message; return; }
+  msg.className='msg success';
+  msg.innerHTML = `<b>${esc(data.category)}</b><br>${esc(data.detailsText)}<br><br>${data.reply ? '💬 الرد: '+esc(data.reply) : 'قيد المراجعة، لسا ما في رد'}`;
+}
+
+// ---------- بدء التشغيل ----------
+if(token && familyName){ screenMenu(); } else { screenId(); }
+</script>
+</body>
+</html>
