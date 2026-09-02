@@ -207,6 +207,11 @@ export default {
         const distributions = await env.DB.prepare(
           `SELECT item_name, quantity, source_org, distribution_date FROM distributions WHERE family_id=? ORDER BY distribution_date DESC LIMIT 50`
         ).bind(session.family_id).all();
+        const visibleFields = await env.DB.prepare(
+          `SELECT cf.label, cfv.value FROM custom_fields cf
+           JOIN custom_field_values cfv ON cfv.field_id = cf.id
+           WHERE cf.active=1 AND cf.visible_to_family=1 AND cf.scope='family' AND cfv.family_id=? AND cfv.member_id IS NULL`
+        ).bind(session.family_id).all();
         return json({
           ok: true,
           fields: [
@@ -216,6 +221,7 @@ export default {
             { label: "منطقة الأصل", value: family.origin_area || "—" },
             { label: "الحالة", value: family.status },
             ...members.results.map((m) => ({ label: m.relation || "فرد", value: m.full_name })),
+            ...visibleFields.results.map((v) => ({ label: v.label, value: v.value })),
           ],
           distributions: distributions.results,
         });
